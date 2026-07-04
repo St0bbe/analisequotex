@@ -6,6 +6,8 @@ class Settings:
     timeframe: str = "M1"
     timeframe_seconds: int = 60
     candle_limit: int = 240
+    scanner_cycles: int = 5
+    scanner_sleep_seconds: int = 3
     symbols: tuple[str, ...] = field(
         default_factory=lambda: (
             "EURUSD",
@@ -23,7 +25,11 @@ class Settings:
     ema_trend_period: int = 50
     bollinger_period: int = 20
     bollinger_std: float = 2.0
-    min_confidence: float = 0.72
+    atr_period: int = 14
+    stochastic_period: int = 14
+    stochastic_signal_period: int = 3
+    min_confidence: float = 0.74
+    min_bollinger_width: float = 0.0008
 
 
 def get_settings() -> Settings:
