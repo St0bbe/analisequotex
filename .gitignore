@@ -1,0 +1,23 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Arquivos locais
+.env
+*.env
+
+# Resultados gerados pela simulacao
+signals.csv
+backtest_report.csv
+*.log
+
+# Sistema/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
