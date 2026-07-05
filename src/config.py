@@ -30,6 +30,7 @@ class Settings:
     stochastic_signal_period: int = 3
     min_confidence: float = 0.74
     min_bollinger_width: float = 0.0008
+    min_volatility_ratio: float = 0.000002
 
 
 def get_settings() -> Settings:
