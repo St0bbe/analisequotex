@@ -26,6 +26,22 @@ from src.win_rate import passes_min_win_rate, load_combined_win_rates, estimated
 console = Console()
 OUTPUT_PATH = Path("paper_validation_results.csv")
 OPPORTUNITY_PATH = Path("csv_replay_opportunity_report.csv")
+OUTPUT_FIELDS = [
+    "created_at",
+    "evaluated_at",
+    "feed",
+    "symbol",
+    "original_side",
+    "effective_side",
+    "confidence",
+    "combined_win_rate",
+    "entry_price",
+    "exit_price",
+    "result",
+    "filter_status",
+    "direction_mode",
+    "reason",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +108,15 @@ def should_invert(symbol: str, side: str, direction_mode: str, opportunity_map: 
     return False
 
 
+def ensure_output_file() -> None:
+    if OUTPUT_PATH.exists():
+        return
+
+    with OUTPUT_PATH.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=OUTPUT_FIELDS)
+        writer.writeheader()
+
+
 def wait_until_window(window: CandleWindow) -> None:
     while not window.is_valid_analysis_time():
         time.sleep(1)
@@ -122,31 +147,13 @@ def evaluate(side: str, entry_price: float, exit_price: float) -> str:
 
 
 def append_rows(rows: list[dict]) -> None:
+    ensure_output_file()
+
     if not rows:
         return
 
-    exists = OUTPUT_PATH.exists()
-    fields = [
-        "created_at",
-        "evaluated_at",
-        "feed",
-        "symbol",
-        "original_side",
-        "effective_side",
-        "confidence",
-        "combined_win_rate",
-        "entry_price",
-        "exit_price",
-        "result",
-        "filter_status",
-        "direction_mode",
-        "reason",
-    ]
-
     with OUTPUT_PATH.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=fields)
-        if not exists:
-            writer.writeheader()
+        writer = csv.DictWriter(file, fieldnames=OUTPUT_FIELDS)
         writer.writerows(rows)
 
 
@@ -179,6 +186,8 @@ def main() -> None:
         OUTPUT_PATH.unlink()
         console.print("Relatorio anterior limpo.")
 
+    ensure_output_file()
+
     settings = get_settings()
     feed = build_feed(args.feed)
     scanner = MultiAssetScanner(settings, candle_feed=feed)
@@ -186,6 +195,7 @@ def main() -> None:
     win_rates = load_combined_win_rates()
     inversion_map = load_auto_inversion_map() if args.direction_mode == "auto" else set()
     symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
+    total_validated = 0
 
     console.print("Validacao em papel iniciada.")
     console.print(f"Fonte de candles: {args.feed}")
@@ -251,9 +261,13 @@ def main() -> None:
             )
 
         append_rows(rows)
+        total_validated += len(rows)
         render_rows(rows)
 
     console.print(f"\nRelatorio salvo em {OUTPUT_PATH}")
+    console.print(f"Sinais validados nesta sessao: {total_validated}")
+    if total_validated == 0:
+        console.print("Nenhum sinal foi validado. Use menos ciclos, outro ativo, ou --include-all-signals para coletar mais dados.")
     console.print("Aviso: use feed real para medir desempenho real; simulated serve apenas para testar o fluxo.")
 
 
