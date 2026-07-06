@@ -20,6 +20,7 @@ from src.storage.signal_logger import SignalLogger
 
 
 console = Console()
+SIGNALS_PATH = Path("signals.csv")
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,7 +36,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Quantidade de ciclos M1 para executar. Exemplo: --cycles 5",
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Limpa o signals.csv antes de iniciar a sessao.",
+    )
     return parser.parse_args()
+
+
+def reset_signals_file() -> None:
+    if SIGNALS_PATH.exists():
+        SIGNALS_PATH.unlink()
+        console.print("Historico signals.csv limpo para nova sessao.")
 
 
 def render_signals(signals, cycle_number: int) -> None:
@@ -123,6 +135,10 @@ def should_continue(cycle_number: int, max_cycles: int | None) -> bool:
 
 def main() -> None:
     args = parse_args()
+
+    if args.fresh:
+        reset_signals_file()
+
     settings = get_settings()
     scanner = MultiAssetScanner(settings)
     logger = SignalLogger()
