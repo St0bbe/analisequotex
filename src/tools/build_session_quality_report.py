@@ -33,6 +33,38 @@ def quality_label(rate: float | None, session_rate: float, confidence: float, to
     return "FRACO_NA_SESSAO"
 
 
+def build_reason(rate: float | None, session_rate: float, confidence: float, total: int) -> str:
+    reasons: list[str] = []
+
+    if total < 5:
+        reasons.append("poucos dados na sessao")
+
+    if rate is None:
+        reasons.append("sem taxa estimada de backtest")
+    elif rate < 53:
+        reasons.append("taxa estimada abaixo de 53%")
+    elif rate < 55:
+        reasons.append("taxa estimada aceitavel, mas abaixo de 55%")
+    else:
+        reasons.append("taxa estimada acima de 55%")
+
+    if session_rate < 0.25:
+        reasons.append("poucos sinais acionaveis na sessao")
+    elif session_rate < 0.40:
+        reasons.append("volume de sinais moderado")
+    else:
+        reasons.append("bom volume de sinais na sessao")
+
+    if confidence < 0.60:
+        reasons.append("confianca media baixa")
+    elif confidence < 0.62:
+        reasons.append("confianca media moderada")
+    else:
+        reasons.append("confianca media boa")
+
+    return "; ".join(reasons)
+
+
 def main() -> None:
     live_session = read_by_symbol(LIVE_SESSION_PATH)
     win_rates = read_by_symbol(WIN_RATE_PATH)
@@ -65,6 +97,7 @@ def main() -> None:
             {
                 "symbol": symbol,
                 "quality": quality_label(rate, session_rate, confidence, total),
+                "reason": build_reason(rate, session_rate, confidence, total),
                 "dominant_side": dominant_side,
                 "estimated_win_rate_percent": round(rate, 2) if rate is not None else "",
                 "session_actionable_rate_percent": round(session_rate * 100, 2),
@@ -96,7 +129,7 @@ def main() -> None:
             f"{row['symbol']} | {row['quality']} | lado dominante {row['dominant_side']} | "
             f"taxa estimada {row['estimated_win_rate_percent']}% | "
             f"acionaveis na sessao {row['session_actionable_rate_percent']}% | "
-            f"confianca media {row['avg_confidence']}"
+            f"confianca media {row['avg_confidence']} | motivo: {row['reason']}"
         )
 
     print(f"Relatorio salvo em {OUTPUT_PATH}")
