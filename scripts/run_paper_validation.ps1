@@ -43,9 +43,15 @@ if ($Symbols.Count -gt 0) {
 & $PythonCmd -m src.tools.build_real_performance_report
 & $PythonCmd -m src.tools.build_empirical_win_rates
 
-Write-Host "Abrindo relatorios..." -ForegroundColor Cyan
-notepad real_performance_report.csv
-notepad empirical_win_rates.csv
-notepad paper_validation_results.csv
+Write-Host "Abrindo relatorios disponiveis..." -ForegroundColor Cyan
+$reports = @("real_performance_report.csv", "empirical_win_rates.csv", "paper_validation_results.csv")
+
+foreach ($report in $reports) {
+    if (Test-Path $report) {
+        notepad $report
+    } else {
+        Write-Host "Relatorio nao encontrado, ignorando: $report" -ForegroundColor Yellow
+    }
+}
 
 Write-Host "Processo finalizado." -ForegroundColor Green
