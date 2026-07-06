@@ -4,23 +4,25 @@ from datetime import datetime, timedelta
 import math
 import random
 
+from src.data.base import CandleFeed
 from src.models import Candle
 
 
-class SimulatedCandleFeed:
+class SimulatedCandleFeed(CandleFeed):
     def __init__(self, initial_price: float = 1.1000) -> None:
         self.initial_price = initial_price
 
-    def get_recent_candles(self, limit: int) -> list[Candle]:
+    def get_recent_candles(self, symbol: str, limit: int) -> list[Candle]:
+        initial_price = self._initial_price_for(symbol)
         now = datetime.utcnow().replace(second=0, microsecond=0)
         candles: list[Candle] = []
-        price = self.initial_price
+        price = initial_price
 
         for index in range(limit):
             wave = math.sin(index / 8) * 0.0015
             noise = random.uniform(-0.0006, 0.0006)
             candle_open = price
-            candle_close = self.initial_price + wave + noise
+            candle_close = initial_price + wave + noise
             candle_high = max(candle_open, candle_close) + random.uniform(0.0001, 0.0005)
             candle_low = min(candle_open, candle_close) - random.uniform(0.0001, 0.0005)
             price = candle_close
@@ -36,3 +38,14 @@ class SimulatedCandleFeed:
             )
 
         return candles
+
+    def _initial_price_for(self, symbol: str) -> float:
+        normalized = symbol.replace("-OTC", "")
+
+        if normalized == "USDJPY":
+            return 157.50
+
+        if normalized == "GBPUSD":
+            return 1.2700
+
+        return self.initial_price
