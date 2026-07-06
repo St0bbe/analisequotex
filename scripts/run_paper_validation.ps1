@@ -8,6 +8,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$VenvPython = Join-Path $PSScriptRoot "..\.venv\Scripts\python.exe"
+
+if (Test-Path $VenvPython) {
+    $PythonCmd = $VenvPython
+    Write-Host "Usando Python da venv: $PythonCmd" -ForegroundColor DarkCyan
+} else {
+    $PythonCmd = "python"
+    Write-Host "Aviso: .venv nao encontrada. Usando python global." -ForegroundColor Yellow
+}
+
 Write-Host "Iniciando validacao em papel..." -ForegroundColor Cyan
 Write-Host "Feed: $Feed"
 Write-Host "Cycles: $Cycles"
@@ -26,9 +36,9 @@ if ($Symbols.Count -gt 0) {
     Write-Host "Symbols: $($Symbols -join ', ')"
 }
 
-python @runnerArgs
-python -m src.tools.build_real_performance_report
-python -m src.tools.build_empirical_win_rates
+& $PythonCmd @runnerArgs
+& $PythonCmd -m src.tools.build_real_performance_report
+& $PythonCmd -m src.tools.build_empirical_win_rates
 
 Write-Host "Abrindo relatorios..." -ForegroundColor Cyan
 notepad real_performance_report.csv
