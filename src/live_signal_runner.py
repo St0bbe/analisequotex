@@ -17,6 +17,7 @@ from src.config import get_settings
 from src.entry_window import CandleWindow
 from src.scanner import MultiAssetScanner
 from src.storage.signal_logger import SignalLogger
+from src.win_rate import estimated_win_rate_for, load_estimated_win_rates, passes_min_win_rate
 
 
 console = Console()
@@ -41,6 +42,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Limpa o signals.csv antes de iniciar a sessao.",
     )
+    parser.add_argument(
+        "--min-win-rate",
+        type=float,
+        default=53.0,
+        help="Taxa minima estimada de win para destacar entrada. Exemplo: --min-win-rate 55",
+    )
     return parser.parse_args()
 
 
@@ -50,19 +57,24 @@ def reset_signals_file() -> None:
         console.print("Historico signals.csv limpo para nova sessao.")
 
 
-def render_signals(signals, cycle_number: int) -> None:
+def render_signals(signals, cycle_number: int, win_rates: dict[str, float]) -> None:
     table = Table(title=f"Ciclo {cycle_number} - Sinais na janela ideal M1")
     table.add_column("Ativo")
     table.add_column("Alerta")
     table.add_column("Confianca")
+    table.add_column("Win estimado")
     table.add_column("Preco")
     table.add_column("Motivo")
 
     for signal in signals:
+        estimated = estimated_win_rate_for(signal.symbol, win_rates)
+        estimated_label = f"{estimated:.2f}%" if estimated is not None else "sem relatorio"
+
         table.add_row(
             signal.symbol,
             signal.side.value,
             f"{signal.confidence:.2f}",
+            estimated_label,
             f"{signal.price:.5f}",
             signal.reason,
         )
@@ -70,20 +82,50 @@ def render_signals(signals, cycle_number: int) -> None:
     console.print(table)
 
 
-def render_actionable_alert(signals, seconds_to_next_candle: int) -> None:
-    actionable = [signal for signal in signals if signal.side.value != "WAIT"]
+def render_actionable_alert(
+    signals,
+    seconds_to_next_candle: int,
+    win_rates: dict[str, float],
+    min_win_rate: float,
+) -> None:
+    actionable = [
+        signal
+        for signal in signals
+        if signal.side.value != "WAIT" and passes_min_win_rate(signal.symbol, win_rates, min_win_rate)
+    ]
+
+    blocked = [
+        signal
+        for signal in signals
+        if signal.side.value != "WAIT" and not passes_min_win_rate(signal.symbol, win_rates, min_win_rate)
+    ]
 
     if not actionable:
-        console.print(Panel("Nenhum sinal acionavel nesta vela. Melhor aguardar.", title="SEM ENTRADA"))
+        message = "Nenhum sinal acionavel nesta vela. Melhor aguardar."
+
+        if blocked:
+            blocked_lines = []
+            for signal in blocked:
+                estimated = estimated_win_rate_for(signal.symbol, win_rates)
+                blocked_lines.append(
+                    f"{signal.symbol} -> {signal.side.value} bloqueado | "
+                    f"win estimado {estimated:.2f}% abaixo do minimo {min_win_rate:.2f}%"
+                )
+            message += "\n\n" + "\n".join(blocked_lines)
+
+        console.print(Panel(message, title="SEM ENTRADA"))
         return
 
     print("\a", end="")
 
     lines = []
     for signal in actionable:
+        estimated = estimated_win_rate_for(signal.symbol, win_rates)
+        estimated_label = f"{estimated:.2f}%" if estimated is not None else "sem relatorio"
         lines.append(
             f"{signal.symbol} -> {signal.side.value} | "
             f"confianca {signal.confidence:.2f} | "
+            f"win estimado {estimated_label} | "
             f"entrada na proxima vela em ~{seconds_to_next_candle}s"
         )
 
@@ -143,11 +185,16 @@ def main() -> None:
     scanner = MultiAssetScanner(settings)
     logger = SignalLogger()
     window = CandleWindow()
+    win_rates = load_estimated_win_rates()
     selected_symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
     console.print("Runner continuo iniciado em modo de simulacao.")
     console.print("Pressione CTRL+C para parar.")
     console.print(f"Ativos selecionados: {', '.join(selected_symbols)}")
+    console.print(f"Filtro de win estimado minimo: {args.min_win_rate:.2f}%")
+
+    if not win_rates:
+        console.print("Aviso: win_rate_estimate.csv nao encontrado. Rode python -m src.tools.run_full_analysis para gerar o relatorio.")
 
     if args.cycles:
         console.print(f"Ciclos configurados: {args.cycles}")
@@ -164,11 +211,11 @@ def main() -> None:
             logger.append_many(result.signals)
 
             seconds_to_next_candle = window.seconds_to_next_candle()
-            render_signals(result.ranked, cycle_number)
-            render_actionable_alert(result.ranked, seconds_to_next_candle)
+            render_signals(result.ranked, cycle_number, win_rates)
+            render_actionable_alert(result.ranked, seconds_to_next_candle, win_rates, args.min_win_rate)
 
             console.print(f"Segundos ate a proxima vela: {seconds_to_next_candle}")
-            console.print(f"Sinais acionaveis encontrados: {len(result.actionable)}")
+            console.print(f"Sinais brutos BUY/SELL encontrados: {len(result.actionable)}")
             console.print("Nenhuma ordem real foi enviada.")
 
             cycle_number += 1
