@@ -1,93 +1,238 @@
 # Analise Quotex
 
-Projeto inicial para um robo de analise e sinais de mercado inspirado no fluxo da Quotex.
+Projeto de analise estatistica e validacao de sinais M1 inspirado no fluxo de plataformas como Quotex/Pocket Option.
 
-> Importante: este projeto foi estruturado primeiro como **robo de sinais e simulacao**, sem executar entradas automaticas em conta real. Plataformas como Quotex normalmente nao oferecem API oficial publica para automacao, entao a versao inicial foca em analise, alertas, historico e testes com seguranca.
+> Importante: este projeto e focado em **analise, replay, validacao em papel e sinais simulados**. Ele nao envia ordens reais e nao garante lucro. Use como ferramenta de estudo estatistico.
 
-## Objetivo
+## Status do MVP
 
-Criar uma base profissional para:
+O MVP atual esta focado em uma solucao gratuita baseada em CSV Replay:
 
-- Ler candles de uma fonte configuravel.
-- Calcular indicadores tecnicos.
-- Gerar sinais de COMPRA, VENDA ou AGUARDAR.
-- Registrar os sinais em arquivo.
-- Rodar em modo simulado para validar estrategia.
-- Evoluir depois para dashboard web, Telegram, banco de dados e backtesting.
+- Calcula indicadores tecnicos.
+- Gera sinais BUY, SELL ou WAIT.
+- Testa candles historicos em CSV rapidamente.
+- Avalia WIN, LOSS e DRAW pela proxima vela.
+- Gera relatorios de performance.
+- Calcula win rate empirico.
+- Detecta quando a direcao invertida performa melhor.
+- Permite modo de direcao normal, inverted ou auto.
+- Possui validacao em papel para confirmar vela por vela.
 
-## Stack inicial
+## Requisitos
 
 - Python 3.11+
-- Pandas
-- NumPy
-- python-dotenv
-- Rich para exibicao no terminal
+- Windows PowerShell, CMD, Linux ou Mac
+- Dependencias do `requirements.txt`
 
-## Estrutura
+Instalacao no Windows:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+## Estrutura principal
 
 ```txt
-analisequotex/
-├── src/
-│   ├── main.py
-│   ├── config.py
-│   ├── models.py
-│   ├── data/
-│   │   └── simulated_feed.py
-│   ├── indicators/
-│   │   └── technical.py
-│   ├── strategy/
-│   │   └── rsi_ma_strategy.py
-│   └── storage/
-│       └── signal_logger.py
-├── .env.example
-├── requirements.txt
-└── README.md
+src/
+├── config.py
+├── models.py
+├── scanner.py
+├── live_signal_runner.py
+├── paper_validation_runner.py
+├── data/
+│   ├── simulated_feed.py
+│   ├── csv_feed.py
+│   └── oanda_feed.py
+├── indicators/
+│   └── technical.py
+├── strategy/
+│   └── confluence_strategy.py
+├── storage/
+│   ├── signal_logger.py
+│   └── result_logger.py
+└── tools/
+    ├── generate_sample_data.py
+    ├── run_csv_replay.py
+    ├── analyze_csv_replay_opportunities.py
+    ├── build_real_performance_report.py
+    ├── build_empirical_win_rates.py
+    └── analyze_filter_performance.py
 ```
 
-## Como rodar localmente
+## Fluxo recomendado gratuito
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-python src/main.py
+### 1. Gerar CSVs simulados para teste
+
+```powershell
+python -m src.tools.generate_sample_data
 ```
 
-No Linux/Mac:
+Isso cria arquivos em `data/`, por exemplo:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python src/main.py
+```txt
+data/eurusd_m1.csv
+data/gbpusd_m1.csv
+data/usdjpy_m1.csv
+data/eurusd_otc_m1.csv
+data/gbpusd_otc_m1.csv
+data/usdjpy_otc_m1.csv
 ```
 
-## Como funciona agora
+### 2. Rodar replay normal
 
-A versao inicial usa um feed simulado de candles para testar a logica sem depender de login, token ou corretora.
+```powershell
+python -m src.tools.run_csv_replay --include-all-signals --fresh
+```
 
-A estrategia atual combina:
+Relatorios gerados:
 
-- Media movel curta.
-- Media movel longa.
-- RSI.
+```txt
+csv_replay_results.csv
+csv_replay_performance_report.csv
+empirical_win_rates.csv
+```
 
-Ela gera:
+### 3. Analisar se existe inversao promissora
 
-- `BUY` quando ha tendencia de alta e RSI favoravel.
-- `SELL` quando ha tendencia de baixa e RSI favoravel.
-- `WAIT` quando nao ha confirmacao suficiente.
+```powershell
+python -m src.tools.analyze_csv_replay_opportunities
+notepad csv_replay_opportunity_report.csv
+```
 
-## Proximas etapas recomendadas
+Esse relatorio compara o resultado normal contra o resultado invertido.
 
-1. Validar a estrategia em modo simulado.
-2. Adicionar backtesting com CSV historico.
-3. Criar painel web com React ou Streamlit.
-4. Adicionar alerta via Telegram.
-5. Estudar a viabilidade tecnica e juridica de qualquer integracao com corretora.
+### 4. Rodar replay com direcao automatica
+
+```powershell
+python -m src.tools.run_csv_replay --include-all-signals --direction-mode auto --fresh
+notepad csv_replay_performance_report.csv
+```
+
+O modo `auto` usa `csv_replay_opportunity_report.csv` para inverter apenas grupos marcados como `INVERSAO_PROMISSORA`.
+
+## Validacao em papel
+
+A validacao em papel espera a proxima vela fechar. Por isso ela demora. Use apenas para confirmar em tempo real/simulado depois do replay.
+
+Comando rapido:
+
+```powershell
+.\scripts\run_paper_validation.ps1 -Feed simulated -Cycles 5 -DirectionMode auto -IncludeAllSignals
+```
+
+Comando mais longo:
+
+```powershell
+.\scripts\run_paper_validation.ps1 -Feed simulated -Cycles 30 -DirectionMode auto
+```
+
+Relatorios:
+
+```txt
+paper_validation_results.csv
+real_performance_report.csv
+empirical_win_rates.csv
+```
+
+## Modos de direcao
+
+O replay e a validacao aceitam:
+
+```txt
+normal   -> usa o sinal original
+inverted -> inverte BUY para SELL e SELL para BUY
+auto     -> inverte apenas grupos promissores do relatorio de oportunidade
+```
+
+Exemplo:
+
+```powershell
+python -m src.tools.run_csv_replay --include-all-signals --direction-mode auto --fresh
+```
+
+## Formato de CSV aceito
+
+Cada CSV precisa ter as colunas:
+
+```csv
+timestamp,open,high,low,close
+```
+
+Exemplo:
+
+```csv
+2026-07-06T20:00:00,1.2680,1.2690,1.2675,1.2685
+```
+
+Nome esperado por ativo:
+
+```txt
+EURUSD      -> data/eurusd_m1.csv
+GBPUSD      -> data/gbpusd_m1.csv
+USDJPY      -> data/usdjpy_m1.csv
+EURUSD-OTC  -> data/eurusd_otc_m1.csv
+GBPUSD-OTC  -> data/gbpusd_otc_m1.csv
+USDJPY-OTC  -> data/usdjpy_otc_m1.csv
+```
+
+## Fonte de candles
+
+O projeto nao depende de API paga. O caminho principal do MVP e importar candles via CSV.
+
+Fontes possiveis:
+
+- CSV proprio/exportado.
+- Dados gratuitos de terceiros, se permitirem uso.
+- API oficial, se existir e se for gratuita.
+- OANDA apenas como opcional para Forex real, se voce tiver token disponivel.
+
+Evite depender de scraping do TradingView ou WebSocket interno de plataformas sem permissao.
+
+## Comandos principais
+
+Replay completo:
+
+```powershell
+python -m src.tools.run_csv_replay --include-all-signals --direction-mode auto --fresh
+```
+
+Relatorio de oportunidade:
+
+```powershell
+python -m src.tools.analyze_csv_replay_opportunities
+```
+
+Validacao em papel:
+
+```powershell
+.\scripts\run_paper_validation.ps1 -Feed simulated -Cycles 5 -DirectionMode auto -IncludeAllSignals
+```
+
+Relatorio de performance:
+
+```powershell
+python -m src.tools.build_real_performance_report
+```
+
+Win rate empirico:
+
+```powershell
+python -m src.tools.build_empirical_win_rates
+```
+
+## Quando considerar um resultado confiavel
+
+Use pelo menos:
+
+```txt
+30 a 50 sinais por ativo/direcao para observacao inicial
+100+ sinais para uma leitura mais seria
+```
+
+Resultados com poucas amostras devem ser tratados como `POUCOS_DADOS`.
 
 ## Aviso de risco
 
-Este projeto nao garante lucro e nao deve ser usado como recomendacao financeira. Operacoes de curto prazo e opcoes binarias possuem alto risco. Teste sempre em ambiente demo antes de qualquer decisao real.
+Este projeto nao e recomendacao financeira. Operacoes de curto prazo e opcoes binarias possuem alto risco. Os resultados de replay, simulacao ou validacao em papel nao garantem resultado futuro. Use sempre com dados suficientes, ambiente demo e gestao de risco.
