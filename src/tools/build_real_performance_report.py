@@ -1,22 +1,52 @@
 from __future__ import annotations
 
+import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
 
 
-RESULTS_PATH = Path("signal_results.csv")
+DEFAULT_RESULTS_PATH = Path("paper_validation_results.csv")
+FALLBACK_RESULTS_PATH = Path("signal_results.csv")
 OUTPUT_PATH = Path("real_performance_report.csv")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Gera performance por ativo e direcao")
+    parser.add_argument(
+        "--input",
+        default=None,
+        help="Arquivo de resultados. Padrao: paper_validation_results.csv; fallback: signal_results.csv",
+    )
+    return parser.parse_args()
+
+
+def resolve_input_path(value: str | None) -> Path | None:
+    if value:
+        path = Path(value)
+        return path if path.exists() else None
+
+    if DEFAULT_RESULTS_PATH.exists():
+        return DEFAULT_RESULTS_PATH
+
+    if FALLBACK_RESULTS_PATH.exists():
+        return FALLBACK_RESULTS_PATH
+
+    return None
+
+
 def main() -> None:
-    if not RESULTS_PATH.exists():
-        print("signal_results.csv nao encontrado. Rode: python -m src.tools.evaluate_signal_results")
+    args = parse_args()
+    input_path = resolve_input_path(args.input)
+
+    if input_path is None:
+        print("Nenhum arquivo de resultados encontrado.")
+        print("Rode: python src/paper_validation_runner.py --feed simulated --cycles 3 --fresh")
         return
 
     stats = defaultdict(lambda: {"total": 0, "win": 0, "loss": 0, "draw": 0})
 
-    with RESULTS_PATH.open("r", encoding="utf-8") as file:
+    with input_path.open("r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
 
         for row in reader:
@@ -47,6 +77,7 @@ def main() -> None:
                 "loss": loss,
                 "draw": draw,
                 "win_rate": round(win_rate, 4),
+                "source_file": str(input_path),
             }
         )
 
@@ -61,6 +92,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
+    print(f"Fonte analisada: {input_path}")
     print("Performance por ativo e direcao:")
     for row in rows:
         print(
