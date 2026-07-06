@@ -27,9 +27,15 @@ class MultiAssetScanner:
         self.strategy = ConfluenceStrategy(settings)
 
     def scan_once(self) -> ScanResult:
+        return self.scan_symbols(self.settings.symbols)
+
+    def scan_priority(self) -> ScanResult:
+        return self.scan_symbols(self.settings.priority_symbols)
+
+    def scan_symbols(self, symbols: tuple[str, ...]) -> ScanResult:
         signals: list[MarketSignal] = []
 
-        for symbol in self.settings.symbols:
+        for symbol in symbols:
             seed_price = self._initial_price_for(symbol)
             feed = SimulatedCandleFeed(initial_price=seed_price)
             candles = feed.get_recent_candles(self.settings.candle_limit)
