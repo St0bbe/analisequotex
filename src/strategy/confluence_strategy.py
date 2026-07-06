@@ -38,6 +38,7 @@ class ConfluenceStrategy:
         last = df.iloc[-1]
         previous = df.iloc[-2]
         price = float(last["close"])
+        min_confidence = self.settings.confidence_for_symbol(symbol)
 
         bullish_score = 0.0
         bearish_score = 0.0
@@ -120,22 +121,22 @@ class ConfluenceStrategy:
                 datetime.utcnow(),
             )
 
-        if bullish_score >= self.settings.min_confidence and bullish_score > bearish_score:
+        if bullish_score >= min_confidence and bullish_score > bearish_score:
             return MarketSignal(
                 symbol,
                 SignalSide.BUY,
                 round(bullish_score, 2),
-                "Confluencia alta: " + "; ".join(bullish_reasons),
+                f"Confluencia alta (min {min_confidence:.2f}): " + "; ".join(bullish_reasons),
                 price,
                 datetime.utcnow(),
             )
 
-        if bearish_score >= self.settings.min_confidence and bearish_score > bullish_score:
+        if bearish_score >= min_confidence and bearish_score > bullish_score:
             return MarketSignal(
                 symbol,
                 SignalSide.SELL,
                 round(bearish_score, 2),
-                "Confluencia baixa: " + "; ".join(bearish_reasons),
+                f"Confluencia baixa (min {min_confidence:.2f}): " + "; ".join(bearish_reasons),
                 price,
                 datetime.utcnow(),
             )
@@ -144,7 +145,7 @@ class ConfluenceStrategy:
             symbol,
             SignalSide.WAIT,
             round(max(bullish_score, bearish_score), 2),
-            f"Sem confluencia forte. Alta={bullish_score:.2f}, Baixa={bearish_score:.2f}.",
+            f"Sem confluencia forte. Min={min_confidence:.2f}, Alta={bullish_score:.2f}, Baixa={bearish_score:.2f}.",
             price,
             datetime.utcnow(),
         )
