@@ -35,6 +35,10 @@ def resolve_input_path(value: str | None) -> Path | None:
     return None
 
 
+def side_from_row(row: dict) -> str:
+    return row.get("effective_side") or row.get("side") or row.get("original_side") or "UNKNOWN"
+
+
 def main() -> None:
     args = parse_args()
     input_path = resolve_input_path(args.input)
@@ -50,12 +54,12 @@ def main() -> None:
         reader = csv.DictReader(file)
 
         for row in reader:
-            result = row["result"]
+            result = row.get("result")
             if result not in {"WIN", "LOSS", "DRAW"}:
                 continue
 
-            symbol = row["symbol"]
-            side = row["side"]
+            symbol = row.get("symbol", "UNKNOWN")
+            side = side_from_row(row)
             key = (symbol, side)
             stats[key]["total"] += 1
             stats[key][result.lower()] += 1
