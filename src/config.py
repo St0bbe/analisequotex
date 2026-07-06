@@ -18,6 +18,13 @@ class Settings:
             "USDJPY-OTC",
         )
     )
+    priority_symbols: tuple[str, ...] = field(
+        default_factory=lambda: (
+            "EURUSD-OTC",
+            "GBPUSD",
+            "GBPUSD-OTC",
+        )
+    )
 
     rsi_period: int = 14
     fast_ma_period: int = 9
