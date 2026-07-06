@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         help="Ativos para analisar. Exemplo: --symbols GBPUSD-OTC EURUSD-OTC",
     )
+    parser.add_argument(
+        "--cycles",
+        type=int,
+        default=None,
+        help="Quantidade de ciclos M1 para executar. Exemplo: --cycles 5",
+    )
     return parser.parse_args()
 
 
@@ -108,6 +114,13 @@ def wait_next_candle(window: CandleWindow) -> None:
         time.sleep(1)
 
 
+def should_continue(cycle_number: int, max_cycles: int | None) -> bool:
+    if max_cycles is None:
+        return True
+
+    return cycle_number <= max_cycles
+
+
 def main() -> None:
     args = parse_args()
     settings = get_settings()
@@ -120,10 +133,13 @@ def main() -> None:
     console.print("Pressione CTRL+C para parar.")
     console.print(f"Ativos selecionados: {', '.join(selected_symbols)}")
 
+    if args.cycles:
+        console.print(f"Ciclos configurados: {args.cycles}")
+
     cycle_number = 1
 
     try:
-        while True:
+        while should_continue(cycle_number, args.cycles):
             console.print(f"\nAguardando janela ideal para o ciclo {cycle_number}...")
             wait_until_window(window)
 
@@ -140,7 +156,10 @@ def main() -> None:
             console.print("Nenhuma ordem real foi enviada.")
 
             cycle_number += 1
-            wait_next_candle(window)
+            if should_continue(cycle_number, args.cycles):
+                wait_next_candle(window)
+
+        console.print("\nRunner finalizado apos atingir a quantidade de ciclos configurada.")
 
     except KeyboardInterrupt:
         console.print("\nRunner continuo encerrado pelo usuario.")
