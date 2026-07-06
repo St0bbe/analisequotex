@@ -20,7 +20,7 @@ from src.data.simulated_feed import SimulatedCandleFeed
 from src.entry_window import CandleWindow
 from src.scanner import MultiAssetScanner
 from src.storage.signal_logger import SignalLogger
-from src.win_rate import estimated_win_rate_for, load_estimated_win_rates, passes_min_win_rate
+from src.win_rate import estimated_win_rate_for, load_combined_win_rates, passes_min_win_rate
 
 
 console = Console()
@@ -81,7 +81,7 @@ def render_signals(signals, cycle_number: int, win_rates: dict[str, float]) -> N
     table.add_column("Ativo")
     table.add_column("Alerta")
     table.add_column("Confianca")
-    table.add_column("Win estimado")
+    table.add_column("Win combinado")
     table.add_column("Preco")
     table.add_column("Motivo")
 
@@ -126,9 +126,10 @@ def render_actionable_alert(
             blocked_lines = []
             for signal in blocked:
                 estimated = estimated_win_rate_for(signal.symbol, win_rates)
+                estimated_label = f"{estimated:.2f}%" if estimated is not None else "sem relatorio"
                 blocked_lines.append(
                     f"{signal.symbol} -> {signal.side.value} bloqueado | "
-                    f"win estimado {estimated:.2f}% abaixo do minimo {min_win_rate:.2f}%"
+                    f"win combinado {estimated_label} abaixo do minimo {min_win_rate:.2f}%"
                 )
             message += "\n\n" + "\n".join(blocked_lines)
 
@@ -144,7 +145,7 @@ def render_actionable_alert(
         lines.append(
             f"{signal.symbol} -> {signal.side.value} | "
             f"confianca {signal.confidence:.2f} | "
-            f"win estimado {estimated_label} | "
+            f"win combinado {estimated_label} | "
             f"entrada na proxima vela em ~{seconds_to_next_candle}s"
         )
 
@@ -205,17 +206,17 @@ def main() -> None:
     scanner = MultiAssetScanner(settings, candle_feed=candle_feed)
     logger = SignalLogger()
     window = CandleWindow()
-    win_rates = load_estimated_win_rates()
+    win_rates = load_combined_win_rates()
     selected_symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
     console.print("Runner continuo iniciado em modo de simulacao/analise.")
     console.print("Pressione CTRL+C para parar.")
     console.print(f"Fonte de candles: {args.feed}")
     console.print(f"Ativos selecionados: {', '.join(selected_symbols)}")
-    console.print(f"Filtro de win estimado minimo: {args.min_win_rate:.2f}%")
+    console.print(f"Filtro de win combinado minimo: {args.min_win_rate:.2f}%")
 
     if not win_rates:
-        console.print("Aviso: win_rate_estimate.csv nao encontrado. Rode python -m src.tools.run_full_analysis para gerar o relatorio.")
+        console.print("Aviso: nenhum relatorio de win rate encontrado. Rode a analise completa ou a validacao em papel.")
 
     if args.cycles:
         console.print(f"Ciclos configurados: {args.cycles}")
