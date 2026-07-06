@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+APP_NAME = "ROBO DE ANALISE MINIMALISTA"
 REPORTS = [
     "csv_replay_performance_report.csv",
     "csv_replay_opportunity_report.csv",
@@ -20,10 +21,10 @@ REPORTS = [
 ]
 
 
-class AnaliseQuotexApp:
+class MinimalAnalysisRobotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("Analise Quotex - MVP")
+        self.root.title(f"{APP_NAME} - MVP")
         self.root.geometry("980x680")
         self.root.minsize(860, 560)
 
@@ -41,7 +42,7 @@ class AnaliseQuotexApp:
         header = ttk.Frame(self.root, padding=12)
         header.pack(fill="x")
 
-        title = ttk.Label(header, text="Analise Quotex", font=("Segoe UI", 18, "bold"))
+        title = ttk.Label(header, text=APP_NAME, font=("Segoe UI", 18, "bold"))
         title.pack(anchor="w")
 
         subtitle = ttk.Label(
@@ -253,7 +254,7 @@ class AnaliseQuotexApp:
 
 def main() -> None:
     root = tk.Tk()
-    app = AnaliseQuotexApp(root)
+    MinimalAnalysisRobotApp(root)
     root.mainloop()
 
 
