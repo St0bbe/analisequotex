@@ -25,6 +25,7 @@ from src.win_rate import passes_min_win_rate, load_combined_win_rates, estimated
 
 console = Console()
 OUTPUT_PATH = Path("paper_validation_results.csv")
+OPPORTUNITY_PATH = Path("csv_replay_opportunity_report.csv")
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Valida todos os sinais BUY/SELL, mesmo abaixo do filtro de win combinado.",
     )
+    parser.add_argument(
+        "--direction-mode",
+        choices=["normal", "inverted", "auto"],
+        default="normal",
+        help="Modo de direcao: normal, inverted ou auto com base no relatorio de oportunidades.",
+    )
     return parser.parse_args()
 
 
@@ -52,6 +59,37 @@ def build_feed(name: str):
 
 def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def opposite_side(side: str) -> str:
+    if side == "BUY":
+        return "SELL"
+    if side == "SELL":
+        return "BUY"
+    return side
+
+
+def load_auto_inversion_map(path: Path = OPPORTUNITY_PATH) -> set[tuple[str, str]]:
+    if not path.exists():
+        return set()
+
+    items: set[tuple[str, str]] = set()
+    with path.open("r", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            if row.get("recommendation") != "INVERSAO_PROMISSORA":
+                continue
+            items.add((row["symbol"], row["side"]))
+
+    return items
+
+
+def should_invert(symbol: str, side: str, direction_mode: str, opportunity_map: set[tuple[str, str]]) -> bool:
+    if direction_mode == "inverted":
+        return True
+    if direction_mode == "auto":
+        return (symbol, side) in opportunity_map
+    return False
 
 
 def wait_until_window(window: CandleWindow) -> None:
@@ -93,13 +131,15 @@ def append_rows(rows: list[dict]) -> None:
         "evaluated_at",
         "feed",
         "symbol",
-        "side",
+        "original_side",
+        "effective_side",
         "confidence",
         "combined_win_rate",
         "entry_price",
         "exit_price",
         "result",
         "filter_status",
+        "direction_mode",
         "reason",
     ]
 
@@ -113,19 +153,19 @@ def append_rows(rows: list[dict]) -> None:
 def render_rows(rows: list[dict]) -> None:
     table = Table(title="Validacao da vela seguinte")
     table.add_column("Ativo")
-    table.add_column("Lado")
+    table.add_column("Original")
+    table.add_column("Final")
+    table.add_column("Direcao")
     table.add_column("Filtro")
-    table.add_column("Entrada")
-    table.add_column("Fechamento")
     table.add_column("Resultado")
 
     for row in rows:
         table.add_row(
             row["symbol"],
-            row["side"],
+            row["original_side"],
+            row["effective_side"],
+            row["direction_mode"],
             row["filter_status"],
-            str(row["entry_price"]),
-            str(row["exit_price"]),
             row["result"],
         )
 
@@ -144,12 +184,16 @@ def main() -> None:
     scanner = MultiAssetScanner(settings, candle_feed=feed)
     window = CandleWindow()
     win_rates = load_combined_win_rates()
+    inversion_map = load_auto_inversion_map() if args.direction_mode == "auto" else set()
     symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
     console.print("Validacao em papel iniciada.")
     console.print(f"Fonte de candles: {args.feed}")
     console.print(f"Ativos: {', '.join(symbols)}")
     console.print(f"Ciclos: {args.cycles}")
+    console.print(f"Modo de direcao: {args.direction_mode}")
+    if args.direction_mode == "auto":
+        console.print(f"Regras de inversao carregadas: {len(inversion_map)}")
     console.print("Taxa usada no filtro: combinada (empirica confiavel substitui estimada).")
     if args.include_all_signals:
         console.print("Modo coleta: validando todos os sinais BUY/SELL para aumentar amostras.")
@@ -183,19 +227,25 @@ def main() -> None:
                 continue
             exit_price = candles[-1].close
             combined = estimated_win_rate_for(signal.symbol, win_rates)
+            original_side = signal.side.value
+            inverted = should_invert(signal.symbol, original_side, args.direction_mode, inversion_map)
+            effective_side = opposite_side(original_side) if inverted else original_side
+            applied_direction = "inverted" if inverted else "normal"
             rows.append(
                 {
                     "created_at": signal.created_at.isoformat(),
                     "evaluated_at": utc_now_iso(),
                     "feed": args.feed,
                     "symbol": signal.symbol,
-                    "side": signal.side.value,
+                    "original_side": original_side,
+                    "effective_side": effective_side,
                     "confidence": signal.confidence,
                     "combined_win_rate": combined if combined is not None else "",
                     "entry_price": signal.price,
                     "exit_price": exit_price,
-                    "result": evaluate(signal.side.value, signal.price, exit_price),
+                    "result": evaluate(effective_side, signal.price, exit_price),
                     "filter_status": filter_status,
+                    "direction_mode": applied_direction,
                     "reason": signal.reason,
                 }
             )
