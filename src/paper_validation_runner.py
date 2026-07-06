@@ -20,7 +20,7 @@ from src.data.oanda_feed import OandaCandleFeed
 from src.data.simulated_feed import SimulatedCandleFeed
 from src.entry_window import CandleWindow
 from src.scanner import MultiAssetScanner
-from src.win_rate import passes_min_win_rate, load_estimated_win_rates, estimated_win_rate_for
+from src.win_rate import passes_min_win_rate, load_combined_win_rates, estimated_win_rate_for
 
 
 console = Console()
@@ -31,13 +31,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validacao em papel de sinais M1")
     parser.add_argument("--symbols", nargs="+", help="Ativos para analisar")
     parser.add_argument("--cycles", type=int, default=3, help="Quantidade de ciclos para validar")
-    parser.add_argument("--min-win-rate", type=float, default=53.0, help="Filtro minimo de taxa estimada")
+    parser.add_argument("--min-win-rate", type=float, default=53.0, help="Filtro minimo de taxa combinada")
     parser.add_argument("--feed", choices=["simulated", "csv", "oanda"], default="simulated")
     parser.add_argument("--fresh", action="store_true", help="Limpa o relatorio anterior")
     parser.add_argument(
         "--include-all-signals",
         action="store_true",
-        help="Valida todos os sinais BUY/SELL, mesmo abaixo do filtro de win estimado.",
+        help="Valida todos os sinais BUY/SELL, mesmo abaixo do filtro de win combinado.",
     )
     return parser.parse_args()
 
@@ -95,7 +95,7 @@ def append_rows(rows: list[dict]) -> None:
         "symbol",
         "side",
         "confidence",
-        "estimated_win_rate",
+        "combined_win_rate",
         "entry_price",
         "exit_price",
         "result",
@@ -143,13 +143,14 @@ def main() -> None:
     feed = build_feed(args.feed)
     scanner = MultiAssetScanner(settings, candle_feed=feed)
     window = CandleWindow()
-    win_rates = load_estimated_win_rates()
+    win_rates = load_combined_win_rates()
     symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
     console.print("Validacao em papel iniciada.")
     console.print(f"Fonte de candles: {args.feed}")
     console.print(f"Ativos: {', '.join(symbols)}")
     console.print(f"Ciclos: {args.cycles}")
+    console.print("Taxa usada no filtro: combinada (empirica confiavel substitui estimada).")
     if args.include_all_signals:
         console.print("Modo coleta: validando todos os sinais BUY/SELL para aumentar amostras.")
 
@@ -181,7 +182,7 @@ def main() -> None:
             if not candles:
                 continue
             exit_price = candles[-1].close
-            estimated = estimated_win_rate_for(signal.symbol, win_rates)
+            combined = estimated_win_rate_for(signal.symbol, win_rates)
             rows.append(
                 {
                     "created_at": signal.created_at.isoformat(),
@@ -190,7 +191,7 @@ def main() -> None:
                     "symbol": signal.symbol,
                     "side": signal.side.value,
                     "confidence": signal.confidence,
-                    "estimated_win_rate": estimated if estimated is not None else "",
+                    "combined_win_rate": combined if combined is not None else "",
                     "entry_price": signal.price,
                     "exit_price": exit_price,
                     "result": evaluate(signal.side.value, signal.price, exit_price),
