@@ -3,7 +3,9 @@ param(
     [int]$Cycles = 10,
     [double]$MinWinRate = 53.0,
     [string[]]$Symbols = @(),
-    [switch]$IncludeAllSignals
+    [switch]$IncludeAllSignals,
+    [ValidateSet("normal", "inverted", "auto")]
+    [string]$DirectionMode = "normal"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,8 +24,9 @@ Write-Host "Iniciando validacao em papel..." -ForegroundColor Cyan
 Write-Host "Feed: $Feed"
 Write-Host "Cycles: $Cycles"
 Write-Host "MinWinRate: $MinWinRate"
+Write-Host "DirectionMode: $DirectionMode"
 
-$runnerArgs = @("src/paper_validation_runner.py", "--feed", $Feed, "--cycles", $Cycles, "--fresh", "--min-win-rate", $MinWinRate)
+$runnerArgs = @("src/paper_validation_runner.py", "--feed", $Feed, "--cycles", $Cycles, "--fresh", "--min-win-rate", $MinWinRate, "--direction-mode", $DirectionMode)
 
 if ($IncludeAllSignals) {
     $runnerArgs += "--include-all-signals"
