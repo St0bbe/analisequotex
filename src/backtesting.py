@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import get_settings
+from src.config import Settings, get_settings
 from src.models import Candle, SignalSide
 from src.strategy.confluence_strategy import ConfluenceStrategy
 
@@ -26,10 +26,10 @@ class BacktestSummary:
 
 
 class CsvBacktester:
-    def __init__(self, csv_path: str, symbol: str) -> None:
+    def __init__(self, csv_path: str, symbol: str, settings: Settings | None = None) -> None:
         self.csv_path = Path(csv_path)
         self.symbol = symbol
-        self.settings = get_settings()
+        self.settings = settings or get_settings()
         self.strategy = ConfluenceStrategy(self.settings)
 
     def run(self, lookahead_candles: int = 1) -> BacktestSummary:
