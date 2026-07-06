@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from src.config import get_settings
+from src.entry_window import CandleWindow
 from src.scanner import MultiAssetScanner
 from src.storage.signal_logger import SignalLogger
 
@@ -42,9 +43,16 @@ def main() -> None:
     settings = get_settings()
     scanner = MultiAssetScanner(settings)
     logger = SignalLogger()
+    window = CandleWindow()
 
     console.print("Executando scanner prioritario em modo de simulacao.")
-    console.print(f"Ativos priorizados: {', '.join(settings.priority_symbols)}\n")
+    console.print(f"Ativos priorizados: {', '.join(settings.priority_symbols)}")
+    console.print(window.status_message())
+
+    if not window.is_valid_analysis_time():
+        console.print("Fora da janela ideal. Nenhum sinal sera gerado agora.")
+        console.print("Rode novamente perto dos ultimos segundos da vela M1.")
+        return
 
     result = scanner.scan_priority()
     logger.append_many(result.signals)
@@ -52,6 +60,7 @@ def main() -> None:
 
     actionable = result.actionable
     console.print(f"\nSinais acionaveis encontrados: {len(actionable)}")
+    console.print(f"Segundos ate a proxima vela: {window.seconds_to_next_candle()}")
     console.print("Nenhuma ordem real foi enviada.")
 
 
