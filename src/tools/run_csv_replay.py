@@ -95,29 +95,36 @@ def opposite_side(side: str) -> str:
     return side
 
 
-def should_invert(symbol: str, side: str, filter_status: str, direction_mode: str, opportunity_map: set[tuple[str, str, str]]) -> bool:
+def should_invert(symbol: str, side: str, filter_status: str, direction_mode: str, opportunity_map: set[tuple[str, str]], strict_map: set[tuple[str, str, str]]) -> bool:
     if direction_mode == "inverted":
         return True
 
     if direction_mode == "auto":
-        return (symbol, side, filter_status) in opportunity_map
+        return (symbol, side, filter_status) in strict_map or (symbol, side) in opportunity_map
 
     return False
 
 
-def load_auto_inversion_map(path: Path = OPPORTUNITY_PATH) -> set[tuple[str, str, str]]:
+def load_auto_inversion_maps(path: Path = OPPORTUNITY_PATH) -> tuple[set[tuple[str, str]], set[tuple[str, str, str]]]:
     if not path.exists():
-        return set()
+        return set(), set()
 
-    items: set[tuple[str, str, str]] = set()
+    broad_items: set[tuple[str, str]] = set()
+    strict_items: set[tuple[str, str, str]] = set()
+
     with path.open("r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         for row in reader:
             if row.get("recommendation") != "INVERSAO_PROMISSORA":
                 continue
-            items.add((row["symbol"], row["side"], row.get("filter_status", "UNKNOWN")))
 
-    return items
+            symbol = row["symbol"]
+            side = row["side"]
+            filter_status = row.get("filter_status", "UNKNOWN")
+            broad_items.add((symbol, side))
+            strict_items.add((symbol, side, filter_status))
+
+    return broad_items, strict_items
 
 
 def evaluate(side: str, entry_price: float, exit_price: float) -> str:
@@ -234,7 +241,8 @@ def replay_symbol(
     min_win_rate: float,
     win_rates: dict[str, float],
     direction_mode: str,
-    opportunity_map: set[tuple[str, str, str]],
+    opportunity_map: set[tuple[str, str]],
+    strict_opportunity_map: set[tuple[str, str, str]],
 ) -> list[dict]:
     settings = get_settings()
     strategy = ConfluenceStrategy(settings)
@@ -260,7 +268,7 @@ def replay_symbol(
             continue
 
         original_side = signal.side.value
-        inverted = should_invert(symbol, original_side, filter_status, direction_mode, opportunity_map)
+        inverted = should_invert(symbol, original_side, filter_status, direction_mode, opportunity_map, strict_opportunity_map)
         effective_side = opposite_side(original_side) if inverted else original_side
         applied_direction = "inverted" if inverted else "normal"
 
@@ -295,7 +303,7 @@ def main() -> None:
         reset_outputs()
 
     win_rates = load_combined_win_rates()
-    opportunity_map = load_auto_inversion_map() if args.direction_mode == "auto" else set()
+    opportunity_map, strict_opportunity_map = load_auto_inversion_maps() if args.direction_mode == "auto" else (set(), set())
     all_results: list[dict] = []
 
     print("CSV Replay iniciado.")
@@ -304,7 +312,8 @@ def main() -> None:
     print(f"Filtro minimo: {args.min_win_rate:.2f}%")
     print(f"Modo de direcao: {args.direction_mode}")
     if args.direction_mode == "auto":
-        print(f"Regras de inversao carregadas: {len(opportunity_map)}")
+        print(f"Regras amplas de inversao carregadas: {len(opportunity_map)}")
+        print(f"Regras estritas de inversao carregadas: {len(strict_opportunity_map)}")
     if args.include_all_signals:
         print("Modo coleta: incluindo todos os sinais BUY/SELL.")
 
@@ -323,6 +332,7 @@ def main() -> None:
             win_rates=win_rates,
             direction_mode=args.direction_mode,
             opportunity_map=opportunity_map,
+            strict_opportunity_map=strict_opportunity_map,
         )
         all_results.extend(rows)
         print(f"{symbol}: {len(rows)} sinais avaliados em replay.")
