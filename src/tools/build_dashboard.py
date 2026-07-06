@@ -8,6 +8,7 @@ from html import escape
 DASHBOARD_PATH = Path("dashboard.html")
 REPORTS = {
     "Ranking de Ativos": Path("asset_ranking_report.csv"),
+    "Chance Estimada de Win": Path("win_rate_estimate.csv"),
     "Resumo dos Sinais": Path("signals_summary.csv"),
     "Melhores Confianças": Path("best_confidence_report.csv"),
     "Backtest": Path("backtest_report.csv"),
