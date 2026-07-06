@@ -14,6 +14,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 from src.config import get_settings
+from src.data.csv_feed import CsvCandleFeed
+from src.data.oanda_feed import OandaCandleFeed
+from src.data.simulated_feed import SimulatedCandleFeed
 from src.entry_window import CandleWindow
 from src.scanner import MultiAssetScanner
 from src.storage.signal_logger import SignalLogger
@@ -48,7 +51,23 @@ def parse_args() -> argparse.Namespace:
         default=53.0,
         help="Taxa minima estimada de win para destacar entrada. Exemplo: --min-win-rate 55",
     )
+    parser.add_argument(
+        "--feed",
+        choices=["simulated", "csv", "oanda"],
+        default="simulated",
+        help="Fonte de candles: simulated, csv ou oanda.",
+    )
     return parser.parse_args()
+
+
+def build_candle_feed(feed_name: str):
+    if feed_name == "csv":
+        return CsvCandleFeed()
+
+    if feed_name == "oanda":
+        return OandaCandleFeed()
+
+    return SimulatedCandleFeed()
 
 
 def reset_signals_file() -> None:
@@ -182,14 +201,16 @@ def main() -> None:
         reset_signals_file()
 
     settings = get_settings()
-    scanner = MultiAssetScanner(settings)
+    candle_feed = build_candle_feed(args.feed)
+    scanner = MultiAssetScanner(settings, candle_feed=candle_feed)
     logger = SignalLogger()
     window = CandleWindow()
     win_rates = load_estimated_win_rates()
     selected_symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
-    console.print("Runner continuo iniciado em modo de simulacao.")
+    console.print("Runner continuo iniciado em modo de simulacao/analise.")
     console.print("Pressione CTRL+C para parar.")
+    console.print(f"Fonte de candles: {args.feed}")
     console.print(f"Ativos selecionados: {', '.join(selected_symbols)}")
     console.print(f"Filtro de win estimado minimo: {args.min_win_rate:.2f}%")
 
