@@ -16,6 +16,7 @@ DATA_DIR = Path("data")
 RESULTS_PATH = Path("csv_replay_results.csv")
 PERFORMANCE_PATH = Path("csv_replay_performance_report.csv")
 EMPIRICAL_PATH = Path("empirical_win_rates.csv")
+OPPORTUNITY_PATH = Path("csv_replay_opportunity_report.csv")
 
 
 DEFAULT_SYMBOLS = (
@@ -36,6 +37,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-all-signals", action="store_true", help="Inclui todos os sinais BUY/SELL, mesmo abaixo do filtro")
     parser.add_argument("--max-rows", type=int, default=None, help="Limite opcional de candles por ativo")
     parser.add_argument("--fresh", action="store_true", help="Limpa relatorios anteriores do replay")
+    parser.add_argument(
+        "--direction-mode",
+        choices=["normal", "inverted", "auto"],
+        default="normal",
+        help="Modo de direcao: normal, inverted ou auto com base no relatorio de oportunidades.",
+    )
     return parser.parse_args()
 
 
@@ -80,6 +87,39 @@ def load_candles(path: Path, max_rows: int | None = None) -> list[Candle]:
     return candles
 
 
+def opposite_side(side: str) -> str:
+    if side == "BUY":
+        return "SELL"
+    if side == "SELL":
+        return "BUY"
+    return side
+
+
+def should_invert(symbol: str, side: str, filter_status: str, direction_mode: str, opportunity_map: set[tuple[str, str, str]]) -> bool:
+    if direction_mode == "inverted":
+        return True
+
+    if direction_mode == "auto":
+        return (symbol, side, filter_status) in opportunity_map
+
+    return False
+
+
+def load_auto_inversion_map(path: Path = OPPORTUNITY_PATH) -> set[tuple[str, str, str]]:
+    if not path.exists():
+        return set()
+
+    items: set[tuple[str, str, str]] = set()
+    with path.open("r", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            if row.get("recommendation") != "INVERSAO_PROMISSORA":
+                continue
+            items.add((row["symbol"], row["side"], row.get("filter_status", "UNKNOWN")))
+
+    return items
+
+
 def evaluate(side: str, entry_price: float, exit_price: float) -> str:
     if side == "BUY":
         if exit_price > entry_price:
@@ -122,12 +162,12 @@ def build_performance_rows(results: list[dict]) -> list[dict]:
         if result not in {"WIN", "LOSS", "DRAW"}:
             continue
 
-        key = (row["symbol"], row["side"], row["filter_status"])
+        key = (row["symbol"], row["effective_side"], row["filter_status"], row["direction_mode"])
         stats[key]["total"] += 1
         stats[key][result.lower()] += 1
 
     rows = []
-    for (symbol, side, filter_status), item in stats.items():
+    for (symbol, effective_side, filter_status, direction_mode), item in stats.items():
         total = item["total"]
         win = item["win"]
         loss = item["loss"]
@@ -136,8 +176,9 @@ def build_performance_rows(results: list[dict]) -> list[dict]:
         rows.append(
             {
                 "symbol": symbol,
-                "side": side,
+                "effective_side": effective_side,
                 "filter_status": filter_status,
+                "direction_mode": direction_mode,
                 "total": total,
                 "win": win,
                 "loss": loss,
@@ -186,7 +227,15 @@ def build_empirical_rows(results: list[dict], min_samples: int = 10) -> list[dic
     return rows
 
 
-def replay_symbol(symbol: str, candles: list[Candle], include_all: bool, min_win_rate: float, win_rates: dict[str, float]) -> list[dict]:
+def replay_symbol(
+    symbol: str,
+    candles: list[Candle],
+    include_all: bool,
+    min_win_rate: float,
+    win_rates: dict[str, float],
+    direction_mode: str,
+    opportunity_map: set[tuple[str, str, str]],
+) -> list[dict]:
     settings = get_settings()
     strategy = ConfluenceStrategy(settings)
     rows: list[dict] = []
@@ -205,9 +254,15 @@ def replay_symbol(symbol: str, candles: list[Candle], include_all: bool, min_win
 
         combined = estimated_win_rate_for(symbol, win_rates)
         passed_filter = passes_min_win_rate(symbol, win_rates, min_win_rate)
+        filter_status = "PASSED" if passed_filter else "BELOW_FILTER"
 
         if not include_all and not passed_filter:
             continue
+
+        original_side = signal.side.value
+        inverted = should_invert(symbol, original_side, filter_status, direction_mode, opportunity_map)
+        effective_side = opposite_side(original_side) if inverted else original_side
+        applied_direction = "inverted" if inverted else "normal"
 
         rows.append(
             {
@@ -215,13 +270,15 @@ def replay_symbol(symbol: str, candles: list[Candle], include_all: bool, min_win
                 "evaluated_candle_time": next_candle.timestamp.isoformat(),
                 "feed": "csv_replay",
                 "symbol": symbol,
-                "side": signal.side.value,
+                "original_side": original_side,
+                "effective_side": effective_side,
                 "confidence": round(signal.confidence, 4),
                 "combined_win_rate": combined if combined is not None else "",
                 "entry_price": signal.price,
                 "exit_price": next_candle.close,
-                "result": evaluate(signal.side.value, signal.price, next_candle.close),
-                "filter_status": "PASSED" if passed_filter else "BELOW_FILTER",
+                "result": evaluate(effective_side, signal.price, next_candle.close),
+                "filter_status": filter_status,
+                "direction_mode": applied_direction,
                 "reason": signal.reason,
             }
         )
@@ -238,12 +295,16 @@ def main() -> None:
         reset_outputs()
 
     win_rates = load_combined_win_rates()
+    opportunity_map = load_auto_inversion_map() if args.direction_mode == "auto" else set()
     all_results: list[dict] = []
 
     print("CSV Replay iniciado.")
     print(f"Pasta de dados: {data_dir}")
     print(f"Ativos: {', '.join(symbols)}")
     print(f"Filtro minimo: {args.min_win_rate:.2f}%")
+    print(f"Modo de direcao: {args.direction_mode}")
+    if args.direction_mode == "auto":
+        print(f"Regras de inversao carregadas: {len(opportunity_map)}")
     if args.include_all_signals:
         print("Modo coleta: incluindo todos os sinais BUY/SELL.")
 
@@ -254,7 +315,15 @@ def main() -> None:
             continue
 
         candles = load_candles(path, args.max_rows)
-        rows = replay_symbol(symbol, candles, args.include_all_signals, args.min_win_rate, win_rates)
+        rows = replay_symbol(
+            symbol=symbol,
+            candles=candles,
+            include_all=args.include_all_signals,
+            min_win_rate=args.min_win_rate,
+            win_rates=win_rates,
+            direction_mode=args.direction_mode,
+            opportunity_map=opportunity_map,
+        )
         all_results.extend(rows)
         print(f"{symbol}: {len(rows)} sinais avaliados em replay.")
 
@@ -271,7 +340,7 @@ def main() -> None:
     print("\nPerformance do replay:")
     for row in performance_rows[:20]:
         print(
-            f"{row['symbol']} {row['side']} {row['filter_status']} | "
+            f"{row['symbol']} {row['effective_side']} {row['filter_status']} {row['direction_mode']} | "
             f"win rate {row['win_rate_percent']}% | total {row['total']} | "
             f"WIN {row['win']} | LOSS {row['loss']} | DRAW {row['draw']}"
         )
