@@ -11,9 +11,33 @@ __pycache__/
 .env
 *.env
 
-# Resultados gerados pela simulacao
+# Dados e relatorios gerados localmente
 signals.csv
+signal_results.csv
+signals_summary.csv
 backtest_report.csv
+asset_ranking_report.csv
+best_confidence_report.csv
+confidence_optimization_report.csv
+csv_replay_results.csv
+csv_replay_performance_report.csv
+csv_replay_opportunity_report.csv
+empirical_win_rates.csv
+filter_performance_report.csv
+indicator_group_report.csv
+live_session_summary.csv
+paper_validation_results.csv
+real_performance_report.csv
+session_quality_report.csv
+win_rate_estimate.csv
+dashboard.html
+
+# Dados CSV locais/importados
+# Remova esta regra se quiser versionar candles de exemplo.
+data/
+
+# Arquivos acidentais comuns
+README.mdpwd
 *.log
 
 # Sistema/Editor
