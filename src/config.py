@@ -31,6 +31,19 @@ class Settings:
     min_confidence: float = 0.74
     min_bollinger_width: float = 0.0008
     min_volatility_ratio: float = 0.000002
+    optimized_confidence_by_symbol: dict[str, float] = field(
+        default_factory=lambda: {
+            "EURUSD": 0.66,
+            "GBPUSD": 0.78,
+            "USDJPY": 0.82,
+            "EURUSD-OTC": 0.74,
+            "GBPUSD-OTC": 0.58,
+            "USDJPY-OTC": 0.58,
+        }
+    )
+
+    def confidence_for_symbol(self, symbol: str) -> float:
+        return self.optimized_confidence_by_symbol.get(symbol, self.min_confidence)
 
 
 def get_settings() -> Settings:
