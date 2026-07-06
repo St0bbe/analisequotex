@@ -4,7 +4,7 @@ import argparse
 import csv
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +43,10 @@ def build_feed(name: str):
     if name == "oanda":
         return OandaCandleFeed()
     return SimulatedCandleFeed()
+
+
+def utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def wait_until_window(window: CandleWindow) -> None:
@@ -169,7 +173,7 @@ def main() -> None:
             rows.append(
                 {
                     "created_at": signal.created_at.isoformat(),
-                    "evaluated_at": datetime.utcnow().isoformat(),
+                    "evaluated_at": utc_now_iso(),
                     "feed": args.feed,
                     "symbol": signal.symbol,
                     "side": signal.side.value,
