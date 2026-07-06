@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -19,6 +20,16 @@ from src.storage.signal_logger import SignalLogger
 
 
 console = Console()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Runner continuo de sinais M1")
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        help="Ativos para analisar. Exemplo: --symbols GBPUSD-OTC EURUSD-OTC",
+    )
+    return parser.parse_args()
 
 
 def render_signals(signals, cycle_number: int) -> None:
@@ -98,14 +109,16 @@ def wait_next_candle(window: CandleWindow) -> None:
 
 
 def main() -> None:
+    args = parse_args()
     settings = get_settings()
     scanner = MultiAssetScanner(settings)
     logger = SignalLogger()
     window = CandleWindow()
+    selected_symbols = tuple(args.symbols) if args.symbols else settings.priority_symbols
 
     console.print("Runner continuo iniciado em modo de simulacao.")
     console.print("Pressione CTRL+C para parar.")
-    console.print(f"Ativos priorizados: {', '.join(settings.priority_symbols)}")
+    console.print(f"Ativos selecionados: {', '.join(selected_symbols)}")
 
     cycle_number = 1
 
@@ -115,7 +128,7 @@ def main() -> None:
             wait_until_window(window)
 
             console.print(window.status_message())
-            result = scanner.scan_priority()
+            result = scanner.scan_symbols(selected_symbols)
             logger.append_many(result.signals)
 
             seconds_to_next_candle = window.seconds_to_next_candle()
