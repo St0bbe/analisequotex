@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +8,17 @@ from pathlib import Path
 
 SIGNALS_PATH = Path("signals.csv")
 OUTPUT_PATH = Path("signal_results.csv")
+MAX_PRICE_DISTANCE_RATIO = 0.01
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Avalia sinais BUY/SELL contra a vela seguinte disponivel")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Forca avaliacao mesmo quando o preco do sinal parece incompatível com o CSV de candles.",
+    )
+    return parser.parse_args()
 
 
 def parse_datetime(value: str) -> datetime:
@@ -36,15 +48,37 @@ def load_candles(symbol: str) -> list[dict]:
     return candles
 
 
+def normalize_time(candle_time: datetime, signal_time: datetime) -> datetime:
+    if candle_time.tzinfo is not None and signal_time.tzinfo is None:
+        return candle_time.replace(tzinfo=None)
+    return candle_time
+
+
+def find_reference_candle(candles: list[dict], signal_time: datetime) -> dict | None:
+    previous = None
+    for candle in candles:
+        candle_time = normalize_time(candle["timestamp"], signal_time)
+        if candle_time <= signal_time:
+            previous = candle
+        else:
+            return previous
+    return previous
+
+
 def find_next_candle(candles: list[dict], signal_time: datetime) -> dict | None:
     for candle in candles:
-        candle_time = candle["timestamp"]
-        if candle_time.tzinfo is not None and signal_time.tzinfo is None:
-            candle_time = candle_time.replace(tzinfo=None)
+        candle_time = normalize_time(candle["timestamp"], signal_time)
         if candle_time > signal_time:
             return candle
 
     return None
+
+
+def is_price_compatible(signal_price: float, reference_price: float) -> bool:
+    if reference_price == 0:
+        return False
+    distance = abs(signal_price - reference_price) / abs(reference_price)
+    return distance <= MAX_PRICE_DISTANCE_RATIO
 
 
 def evaluate_result(side: str, entry_price: float, candle: dict) -> str:
@@ -68,6 +102,8 @@ def evaluate_result(side: str, entry_price: float, candle: dict) -> str:
 
 
 def main() -> None:
+    args = parse_args()
+
     if not SIGNALS_PATH.exists():
         print("signals.csv nao encontrado. Rode o runner antes.")
         return
@@ -94,11 +130,14 @@ def main() -> None:
                         "result": "NO_CANDLES",
                         "exit_time": "",
                         "exit_close": "",
+                        "note": "arquivo de candles nao encontrado",
                     }
                 )
                 continue
 
             signal_time = parse_datetime(signal["created_at"])
+            signal_price = float(signal["price"])
+            reference_candle = find_reference_candle(candles, signal_time)
             next_candle = find_next_candle(candles, signal_time)
 
             if next_candle is None:
@@ -108,17 +147,33 @@ def main() -> None:
                         "result": "PENDING",
                         "exit_time": "",
                         "exit_close": "",
+                        "note": "ainda nao ha candle posterior ao sinal no arquivo",
                     }
                 )
                 continue
 
-            result = evaluate_result(side, float(signal["price"]), next_candle)
+            if reference_candle and not args.force:
+                reference_price = float(reference_candle["close"])
+                if not is_price_compatible(signal_price, reference_price):
+                    rows.append(
+                        {
+                            **signal,
+                            "result": "INCOMPATIBLE_DATA",
+                            "exit_time": next_candle["timestamp"].isoformat(),
+                            "exit_close": next_candle["close"],
+                            "note": "preco do sinal distante do CSV; provavel mistura de sessoes/fontes",
+                        }
+                    )
+                    continue
+
+            result = evaluate_result(side, signal_price, next_candle)
             rows.append(
                 {
                     **signal,
                     "result": result,
                     "exit_time": next_candle["timestamp"].isoformat(),
                     "exit_close": next_candle["close"],
+                    "note": "avaliado",
                 }
             )
 
@@ -131,7 +186,14 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    totals: dict[str, int] = {"WIN": 0, "LOSS": 0, "DRAW": 0, "PENDING": 0, "NO_CANDLES": 0}
+    totals: dict[str, int] = {
+        "WIN": 0,
+        "LOSS": 0,
+        "DRAW": 0,
+        "PENDING": 0,
+        "NO_CANDLES": 0,
+        "INCOMPATIBLE_DATA": 0,
+    }
     for row in rows:
         totals[row["result"]] = totals.get(row["result"], 0) + 1
 
@@ -144,9 +206,10 @@ def main() -> None:
     print(f"DRAW: {totals.get('DRAW', 0)}")
     print(f"PENDING: {totals.get('PENDING', 0)}")
     print(f"NO_CANDLES: {totals.get('NO_CANDLES', 0)}")
+    print(f"INCOMPATIBLE_DATA: {totals.get('INCOMPATIBLE_DATA', 0)}")
     print(f"Win rate avaliado: {win_rate:.2%}")
     print(f"Relatorio salvo em {OUTPUT_PATH}")
-    print("Aviso: este avaliador depende da fonte de candles usada no arquivo data/.")
+    print("Aviso: se aparecer INCOMPATIBLE_DATA, o sinal e o CSV provavelmente nao vieram da mesma sessao/fonte.")
 
 
 if __name__ == "__main__":
