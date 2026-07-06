@@ -2,7 +2,8 @@ param(
     [string]$Feed = "simulated",
     [int]$Cycles = 10,
     [double]$MinWinRate = 53.0,
-    [string[]]$Symbols = @()
+    [string[]]$Symbols = @(),
+    [switch]$IncludeAllSignals
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,11 @@ Write-Host "Cycles: $Cycles"
 Write-Host "MinWinRate: $MinWinRate"
 
 $runnerArgs = @("src/paper_validation_runner.py", "--feed", $Feed, "--cycles", $Cycles, "--fresh", "--min-win-rate", $MinWinRate)
+
+if ($IncludeAllSignals) {
+    $runnerArgs += "--include-all-signals"
+    Write-Host "IncludeAllSignals: ativo"
+}
 
 if ($Symbols.Count -gt 0) {
     $runnerArgs += "--symbols"
