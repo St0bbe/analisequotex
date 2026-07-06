@@ -1,4 +1,4 @@
-# Analise Quotex
+# ROBO DE ANALISE MINIMALISTA
 
 Projeto de analise estatistica e validacao de sinais M1 inspirado no fluxo de plataformas como Quotex/Pocket Option.
 
@@ -41,6 +41,7 @@ src/
 ├── scanner.py
 ├── live_signal_runner.py
 ├── paper_validation_runner.py
+├── interface_app.py
 ├── data/
 │   ├── simulated_feed.py
 │   ├── csv_feed.py
@@ -59,6 +60,25 @@ src/
     ├── build_real_performance_report.py
     ├── build_empirical_win_rates.py
     └── analyze_filter_performance.py
+```
+
+## Como abrir a interface
+
+Use este comando:
+
+```powershell
+.\scripts\run_interface.ps1
+```
+
+A interface permite rodar o projeto por botoes:
+
+```txt
+Rodar CSV Replay
+Analisar oportunidades
+Rodar Replay Auto
+Validacao em papel
+Abrir relatorios
+Abrir pasta do projeto
 ```
 
 ## Fluxo recomendado gratuito
@@ -191,6 +211,12 @@ Fontes possiveis:
 Evite depender de scraping do TradingView ou WebSocket interno de plataformas sem permissao.
 
 ## Comandos principais
+
+Abrir interface:
+
+```powershell
+.\scripts\run_interface.ps1
+```
 
 Replay completo:
 
