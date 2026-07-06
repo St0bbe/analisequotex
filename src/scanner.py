@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.config import Settings
+from src.data.base import CandleFeed
 from src.data.simulated_feed import SimulatedCandleFeed
 from src.models import MarketSignal, SignalSide
 from src.strategy.confluence_strategy import ConfluenceStrategy
@@ -22,9 +23,10 @@ class ScanResult:
 
 
 class MultiAssetScanner:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, candle_feed: CandleFeed | None = None) -> None:
         self.settings = settings
         self.strategy = ConfluenceStrategy(settings)
+        self.candle_feed = candle_feed or SimulatedCandleFeed()
 
     def scan_once(self) -> ScanResult:
         return self.scan_symbols(self.settings.symbols)
@@ -36,21 +38,8 @@ class MultiAssetScanner:
         signals: list[MarketSignal] = []
 
         for symbol in symbols:
-            seed_price = self._initial_price_for(symbol)
-            feed = SimulatedCandleFeed(initial_price=seed_price)
-            candles = feed.get_recent_candles(self.settings.candle_limit)
+            candles = self.candle_feed.get_recent_candles(symbol, self.settings.candle_limit)
             signal = self.strategy.analyze(symbol, candles)
             signals.append(signal)
 
         return ScanResult(signals=signals)
-
-    def _initial_price_for(self, symbol: str) -> float:
-        normalized = symbol.replace("-OTC", "")
-
-        if normalized == "USDJPY":
-            return 157.50
-
-        if normalized == "GBPUSD":
-            return 1.2700
-
-        return 1.1000
