@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from src.config import get_settings
@@ -38,6 +39,32 @@ def render_signals(signals, cycle_number: int) -> None:
         )
 
     console.print(table)
+
+
+def render_actionable_alert(signals, seconds_to_next_candle: int) -> None:
+    actionable = [signal for signal in signals if signal.side.value != "WAIT"]
+
+    if not actionable:
+        console.print(Panel("Nenhum sinal acionavel nesta vela. Melhor aguardar.", title="SEM ENTRADA"))
+        return
+
+    print("\a", end="")
+
+    lines = []
+    for signal in actionable:
+        lines.append(
+            f"{signal.symbol} -> {signal.side.value} | "
+            f"confianca {signal.confidence:.2f} | "
+            f"entrada na proxima vela em ~{seconds_to_next_candle}s"
+        )
+
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="ALERTA OPERACIONAL",
+            subtitle="Sinal apenas para estudo/simulacao. Nenhuma ordem real foi enviada.",
+        )
+    )
 
 
 def wait_until_window(window: CandleWindow) -> None:
@@ -90,9 +117,12 @@ def main() -> None:
             console.print(window.status_message())
             result = scanner.scan_priority()
             logger.append_many(result.signals)
-            render_signals(result.ranked, cycle_number)
 
-            console.print(f"Segundos ate a proxima vela: {window.seconds_to_next_candle()}")
+            seconds_to_next_candle = window.seconds_to_next_candle()
+            render_signals(result.ranked, cycle_number)
+            render_actionable_alert(result.ranked, seconds_to_next_candle)
+
+            console.print(f"Segundos ate a proxima vela: {seconds_to_next_candle}")
             console.print(f"Sinais acionaveis encontrados: {len(result.actionable)}")
             console.print("Nenhuma ordem real foi enviada.")
 
