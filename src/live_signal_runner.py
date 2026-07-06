@@ -41,13 +41,24 @@ def render_signals(signals, cycle_number: int) -> None:
 
 
 def wait_until_window(window: CandleWindow) -> None:
-    last_message = ""
+    last_bucket = None
 
     while not window.is_valid_analysis_time():
-        message = window.status_message()
-        if message != last_message:
+        seconds_to_next = window.seconds_to_next_candle()
+        elapsed = window.elapsed_seconds()
+
+        if elapsed > window.end_second:
+            bucket = "next"
+            message = f"Proxima vela em {seconds_to_next}s. Aguardando nova vela..."
+        else:
+            seconds_to_window = max(window.start_second - elapsed, 0)
+            bucket = seconds_to_window // 5
+            message = f"Aguardando janela ideal. Falta cerca de {seconds_to_window}s para analisar."
+
+        if bucket != last_bucket or seconds_to_next <= 5:
             console.print(message)
-            last_message = message
+            last_bucket = bucket
+
         time.sleep(1)
 
 
