@@ -34,6 +34,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-win-rate", type=float, default=53.0, help="Filtro minimo de taxa estimada")
     parser.add_argument("--feed", choices=["simulated", "csv", "oanda"], default="simulated")
     parser.add_argument("--fresh", action="store_true", help="Limpa o relatorio anterior")
+    parser.add_argument(
+        "--include-all-signals",
+        action="store_true",
+        help="Valida todos os sinais BUY/SELL, mesmo abaixo do filtro de win estimado.",
+    )
     return parser.parse_args()
 
 
@@ -94,6 +99,7 @@ def append_rows(rows: list[dict]) -> None:
         "entry_price",
         "exit_price",
         "result",
+        "filter_status",
         "reason",
     ]
 
@@ -108,6 +114,7 @@ def render_rows(rows: list[dict]) -> None:
     table = Table(title="Validacao da vela seguinte")
     table.add_column("Ativo")
     table.add_column("Lado")
+    table.add_column("Filtro")
     table.add_column("Entrada")
     table.add_column("Fechamento")
     table.add_column("Resultado")
@@ -116,6 +123,7 @@ def render_rows(rows: list[dict]) -> None:
         table.add_row(
             row["symbol"],
             row["side"],
+            row["filter_status"],
             str(row["entry_price"]),
             str(row["exit_price"]),
             row["result"],
@@ -142,6 +150,8 @@ def main() -> None:
     console.print(f"Fonte de candles: {args.feed}")
     console.print(f"Ativos: {', '.join(symbols)}")
     console.print(f"Ciclos: {args.cycles}")
+    if args.include_all_signals:
+        console.print("Modo coleta: validando todos os sinais BUY/SELL para aumentar amostras.")
 
     for cycle in range(1, args.cycles + 1):
         console.print(f"\nAguardando janela do ciclo {cycle}...")
@@ -152,8 +162,10 @@ def main() -> None:
         for signal in result.ranked:
             if signal.side.value == "WAIT":
                 continue
-            if passes_min_win_rate(signal.symbol, win_rates, args.min_win_rate):
-                selected.append(signal)
+
+            passed_filter = passes_min_win_rate(signal.symbol, win_rates, args.min_win_rate)
+            if args.include_all_signals or passed_filter:
+                selected.append((signal, "PASSED" if passed_filter else "BELOW_FILTER"))
 
         if not selected:
             console.print("Nenhum sinal passou nos filtros deste ciclo.")
@@ -164,7 +176,7 @@ def main() -> None:
         wait_next_closed_candle(window)
 
         rows = []
-        for signal in selected:
+        for signal, filter_status in selected:
             candles = feed.get_recent_candles(signal.symbol, settings.candle_limit)
             if not candles:
                 continue
@@ -182,6 +194,7 @@ def main() -> None:
                     "entry_price": signal.price,
                     "exit_price": exit_price,
                     "result": evaluate(signal.side.value, signal.price, exit_price),
+                    "filter_status": filter_status,
                     "reason": signal.reason,
                 }
             )
