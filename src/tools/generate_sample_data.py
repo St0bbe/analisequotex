@@ -13,7 +13,7 @@ def generate_symbol_csv(symbol: str, initial_price: float, candles_count: int = 
     OUTPUT_DIR.mkdir(exist_ok=True)
     output_path = OUTPUT_DIR / f"{symbol.lower().replace('-', '_')}_m1.csv"
     feed = SimulatedCandleFeed(initial_price=initial_price)
-    candles = feed.get_recent_candles(candles_count)
+    candles = feed.get_recent_candles(symbol, candles_count)
 
     with output_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=["timestamp", "open", "high", "low", "close"])
